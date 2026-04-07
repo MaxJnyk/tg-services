@@ -30,6 +30,23 @@ class ErrorAction(enum.Enum):
     DLQ = "dlq"
 
 
+class CircuitOpenError(Exception):
+    """Circuit Breaker открыт — запросы к этому токену заблокированы.
+    
+    Args:
+        token: Telegram bot token (masked).
+        recovery_timeout: Секунд до автоматического восстановления.
+    """
+    
+    def __init__(self, token: str, recovery_timeout: int) -> None:
+        self.token = token
+        self.recovery_timeout = recovery_timeout
+        super().__init__(
+            f"Circuit OPEN for token {token[:10]}... "
+            f"Try again in {recovery_timeout}s"
+        )
+
+
 # Ошибки, при которых стоит повторить запрос
 RETRYABLE_ERRORS = (
     TelegramServerError,       # 5xx от Telegram

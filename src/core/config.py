@@ -18,7 +18,8 @@ class Settings(BaseSettings):
 
     # --- Database (read-only к БД tad-backend) ---
     DATABASE_URL: str = Field(
-        description="PostgreSQL async connection string (asyncpg)",
+        default="postgresql+asyncpg://postgres:postgres@localhost:5432/tad",
+        description="PostgreSQL async connection string (asyncpg). PRODUCTION: MUST be overridden via env!",
     )
     DB_POOL_SIZE: int = Field(
         default=20,  # Было 5 — слишком мало для production
@@ -126,3 +127,8 @@ class Settings(BaseSettings):
 # Singleton — создаётся один раз при импорте.
 # Все модули используют этот объект: from src.core.config import settings
 settings = Settings()
+
+# Валидация для production
+if settings.BACKEND_URL != "http://tad-backend:8000" and "localhost" in settings.DATABASE_URL:
+    import warnings
+    warnings.warn("PRODUCTION: Using default DATABASE_URL! Set DATABASE_URL via env.", RuntimeWarning)

@@ -12,7 +12,7 @@ Bot Pool V2 — управление aiogram Bot instances.
 - Health check: при первом реальном запросе, НЕ get_me() cron.
 """
 import time
-from typing import Optional
+from typing import Any, Optional
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramRetryAfter, TelegramUnauthorizedError
@@ -25,18 +25,11 @@ from src.domain.interfaces.infrastructure import (
     NonRetryableError,
     RateLimitError,
 )
-from src.infrastructure.telegram.circuit_breaker import (
-    CircuitBreaker as InMemoryCircuitBreaker,
-    CircuitOpenError,
-)
 from src.infrastructure.telegram.errors import (
+    CircuitOpenError,
     ErrorAction,
     classify_error,
     extract_retry_after,
-)
-from src.infrastructure.telegram.rate_limiter import (
-    TelegramRateLimiter as InMemoryRateLimiter,
-    TelegramRetryAfterError,
 )
 
 
@@ -67,27 +60,24 @@ class BotPool(MessengerClient):
             rate_limiter: Внешний rate limiter (Redis-backed для кластера)
         """
         self._bots: dict[str, Bot] = {}
-        self._circuits: dict[str, InMemoryCircuitBreaker] = {}
+        self._circuits: dict[str, any] = {}  # Circuit breaker instances
         self._last_used: dict[str, float] = {}
         # Токены, прошедшие health check (первый реальный запрос)
         self._verified: set[str] = set()
         
-        # Внешние зависимости (Redis-backed для кластера)
-        self._external_circuit_breaker = circuit_breaker
-        self._external_rate_limiter = rate_limiter
+        # Rate limiter - external (Redis-backed) or will fail
+        self._rate_limiter = rate_limiter
+        if self._rate_limiter is None:
+            raise ValueError("BotPool requires rate_limiter (Redis-backed). In-memory fallback removed.")
         
-        # In-memory fallback (если внешние не переданы)
-        self._in_memory_rate_limiter = InMemoryRateLimiter() if rate_limiter is None else None
+        # Circuit breaker - external (Redis-backed) or will fail  
+        self._circuit_breaker = circuit_breaker
+        if self._circuit_breaker is None:
+            raise ValueError("BotPool requires circuit_breaker (Redis-backed). In-memory fallback removed.")
 
-    def _get_circuit(self, token: str) -> InMemoryCircuitBreaker:
-        """Получить или создать in-memory circuit breaker для токена.
-        
-        NOTE: Если используется внешний Redis CircuitBreaker, 
-        in-memory используется как fallback/cache.
-        """
-        if token not in self._circuits:
-            self._circuits[token] = InMemoryCircuitBreaker(token=token)
-        return self._circuits[token]
+    def _get_circuit(self, token: str):
+        """Get circuit breaker for token (always external Redis-backed)."""
+        return self._circuit_breaker
 
     async def get_bot(self, token: str) -> Optional[Bot]:
         """
@@ -238,9 +228,6 @@ class BotPool(MessengerClient):
                 f"idle={now - self._last_used[token]:.0f}s"
             )
             await self._close_bot(token)
-
-        if to_evict:
-            self._rate_limiter.cleanup_expired_chat_limiters()
 
         return len(to_evict)
 
