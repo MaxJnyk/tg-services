@@ -1,0 +1,108 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tad
+      POSTGRES_USER: tad
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tad"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Dev worker — все задачи, без label фильтрации
+  worker:
+    build: .
+    environment: &worker-env
+      DATABASE_URL: postgresql+asyncpg://tad:${DB_PASSWORD:-password}@postgres:5432/tad
+      REDIS_URL: redis://redis:6379
+      REDIS_DB_BROKER: 0
+      REDIS_DB_DLQ: 1
+      REDIS_DB_CACHE: 2
+      WORKER_ID: worker-dev-1
+      WORKER_CONCURRENCY: 50
+      STRICT_SCHEMA_CHECK: "false"
+      LOG_LEVEL: INFO
+      LOG_FORMAT: text
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    command: taskiq worker src.entrypoints.broker:broker --workers 2 --fs-discover
+
+  # Production worker profiles — запускать через:
+  #   docker-compose --profile posting up -d
+  #   docker-compose --profile billing up -d
+  #   docker-compose --profile stats up -d
+
+  worker-posting:
+    build: .
+    profiles: ["posting"]
+    environment:
+      <<: *worker-env
+      WORKER_ID: worker-posting-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: taskiq worker src.entrypoints.broker:broker --workers 8 --fs-discover --labels posting
+    deploy:
+      replicas: 1
+
+  worker-billing:
+    build: .
+    profiles: ["billing"]
+    environment:
+      <<: *worker-env
+      WORKER_ID: worker-billing-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: taskiq worker src.entrypoints.broker:broker --workers 2 --fs-discover --labels billing
+    deploy:
+      replicas: 1
+
+  worker-stats:
+    build: .
+    profiles: ["stats"]
+    environment:
+      <<: *worker-env
+      WORKER_ID: worker-stats-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: taskiq worker src.entrypoints.broker:broker --workers 3 --fs-discover --labels stats
+    deploy:
+      replicas: 1
+
+volumes:
+  postgres_data:
+  redis_data:
