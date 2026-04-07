@@ -36,7 +36,7 @@ from src.infrastructure.telegram.bot_pool import BotPool
 from src.infrastructure.telegram.userbot_pool import UserbotPool
 from src.infrastructure.telegram.redis_circuit_breaker import RedisCircuitBreaker
 from src.infrastructure.telegram.redis_rate_limiter import RedisRateLimiter
-from src.application.scheduler import LeaderElection, PostingScheduler, StatsScheduler
+from src.tasks.scheduler import LeaderElection, PostingScheduler, StatsScheduler
 
 # Explicit import задач — гарантирует регистрацию на broker.
 # Без этого --fs-discover может не найти задачи при запуске из Docker.
