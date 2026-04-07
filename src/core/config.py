@@ -21,11 +21,11 @@ class Settings(BaseSettings):
         description="PostgreSQL async connection string (asyncpg)",
     )
     DB_POOL_SIZE: int = Field(
-        default=5,
+        default=20,  # Было 5 — слишком мало для production
         description="SQLAlchemy connection pool size",
     )
     DB_MAX_OVERFLOW: int = Field(
-        default=10,
+        default=30,  # Было 10 — даём запас
         description="SQLAlchemy max overflow connections",
     )
     DB_STATEMENT_TIMEOUT: int = Field(
@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     REDIS_DB_CACHE: int = Field(
         default=2,
         description="Redis DB for rate limiters and cache (volatile, TTL-based)",
+    )
+
+    REDIS_MAX_CONNECTIONS: int = Field(
+        default=50,
+        description="Max connections per Redis pool (file descriptor protection)",
     )
 
     # --- Worker ---

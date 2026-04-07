@@ -38,6 +38,7 @@ async def get_broker_redis() -> Redis:
         _broker_redis = Redis.from_url(
             _build_url(settings.REDIS_DB_BROKER),
             decode_responses=True,
+            max_connections=settings.REDIS_MAX_CONNECTIONS,
         )
         logger.debug(f"Redis broker connected: db={settings.REDIS_DB_BROKER}")
     return _broker_redis
@@ -55,6 +56,7 @@ async def get_dlq_redis() -> Redis:
         _dlq_redis = Redis.from_url(
             _build_url(settings.REDIS_DB_DLQ),
             decode_responses=True,
+            max_connections=settings.REDIS_MAX_CONNECTIONS,
         )
         logger.debug(f"Redis DLQ connected: db={settings.REDIS_DB_DLQ}")
     return _dlq_redis
@@ -73,6 +75,7 @@ async def get_cache_redis() -> Redis:
         _cache_redis = Redis.from_url(
             _build_url(settings.REDIS_DB_CACHE),
             decode_responses=True,
+            max_connections=settings.REDIS_MAX_CONNECTIONS,
         )
         logger.debug(f"Redis cache connected: db={settings.REDIS_DB_CACHE}")
     return _cache_redis
